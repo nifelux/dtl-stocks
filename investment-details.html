@@ -18,11 +18,16 @@
   </div>
 
   <div class="segment-tabs">
-    <button class="segment-tab is-active" data-panel="panel-investment-history">Investment</button>
+    <button class="segment-tab is-active" data-panel="panel-alpha-history">Alpha Plans</button>
+    <button class="segment-tab" data-panel="panel-investment-history">Investment</button>
     <button class="segment-tab" data-panel="panel-welfare-history">Welfare</button>
   </div>
 
-  <div id="panel-investment-history" class="segment-panel is-active">
+  <div id="panel-alpha-history" class="segment-panel is-active">
+    <div id="alpha-history"><div class="card">Loading…</div></div>
+  </div>
+
+  <div id="panel-investment-history" class="segment-panel">
     <div id="investment-history"><div class="card">Loading…</div></div>
   </div>
 
@@ -58,15 +63,9 @@ document.querySelectorAll('.segment-tab').forEach(tab => {
 // ---------------- INVESTMENT HISTORY ----------------
 async function loadInvestmentHistory() {
   const user = (await supabase.auth.getUser()).data.user;
-  const { data } = await supabase.from('investments').select('*, products(name)').eq('user_id', user.id).order('created_at', { ascending: false });
-  const container = document.getElementById('investment-history');
+  const { data } = await supabase.from('investments').select('*, products(name, category)').eq('user_id', user.id).order('created_at', { ascending: false });
 
-  if (!data || data.length === 0) {
-    container.innerHTML = '<div class="card">No investments yet — pick a product from the Products page to get started.</div>';
-    return;
-  }
-
-  container.innerHTML = data.map(i => {
+  function renderCard(i) {
     const pct = Math.min(100, Math.round((i.days_elapsed / i.duration_days) * 100));
     return `
     <div class="card history-card mb-2">
@@ -79,7 +78,18 @@ async function loadInvestmentHistory() {
       </div>
       <div class="progress-track mt-2"><div class="progress-fill" style="width:${pct}%"></div></div>
     </div>`;
-  }).join('');
+  }
+
+  const alphaRows = (data || []).filter(i => i.products?.category === 'alpha');
+  const investmentRows = (data || []).filter(i => i.products?.category !== 'alpha');
+
+  document.getElementById('alpha-history').innerHTML = alphaRows.length
+    ? alphaRows.map(renderCard).join('')
+    : '<div class="card">No Alpha Plan purchases yet — check the Products page.</div>';
+
+  document.getElementById('investment-history').innerHTML = investmentRows.length
+    ? investmentRows.map(renderCard).join('')
+    : '<div class="card">No investments yet — pick a product from the Products page to get started.</div>';
 }
 
 // ---------------- WELFARE HISTORY ----------------
