@@ -43,6 +43,13 @@
           <div class="form-group" style="flex:1;"><input id="duration_days" type="number" min="1" class="form-input" placeholder="Duration (days)" required></div>
           <div class="form-group" style="flex:1;"><input id="max_purchases" type="number" min="1" class="form-input" placeholder="Max purchases per user" value="2"></div>
         </div>
+        <div class="form-group">
+          <label class="form-label" style="color:#fff;">Section</label>
+          <select id="category" class="form-select">
+            <option value="investment">Investment</option>
+            <option value="alpha">Alpha Plans</option>
+          </select>
+        </div>
 
         <button id="submit-btn" class="btn btn-primary">Save Product</button>
         <button type="button" id="cancel-edit-btn" class="btn btn-outline" style="display:none;">Cancel</button>
@@ -130,6 +137,7 @@
         document.getElementById('daily_income').value = p.daily_income_amount ?? '';
         document.getElementById('duration_days').value = p.duration_days;
         document.getElementById('max_purchases').value = p.max_purchases_per_user ?? '';
+        document.getElementById('category').value = p.category || 'investment';
         document.getElementById('cancel-edit-btn').style.display = 'inline-flex';
         window.scrollTo({ top: 0, behavior: 'smooth' });
       }
@@ -163,15 +171,23 @@
       submitBtn.textContent = 'Saving…';
 
       const id = document.getElementById('product-id').value;
+      const price = +document.getElementById('price').value;
+      const dailyIncome = +document.getElementById('daily_income').value;
       const payload = {
         id: id || undefined,
         name: document.getElementById('name').value,
         description: document.getElementById('description').value,
-        min_invest: +document.getElementById('price').value,
-        max_invest: +document.getElementById('price').value,
-        daily_income_amount: +document.getElementById('daily_income').value,
+        min_invest: price,
+        max_invest: price,
+        daily_income_amount: dailyIncome,
+        // daily_roi_percent is NOT NULL in the database — this form only
+        // collects a fixed daily amount, so derive the equivalent
+        // percentage automatically rather than leaving it unset (which
+        // was silently failing every save until now).
+        daily_roi_percent: price > 0 ? Number(((dailyIncome / price) * 100).toFixed(2)) : 0,
         duration_days: +document.getElementById('duration_days').value,
-        max_purchases_per_user: document.getElementById('max_purchases').value ? +document.getElementById('max_purchases').value : null
+        max_purchases_per_user: document.getElementById('max_purchases').value ? +document.getElementById('max_purchases').value : null,
+        category: document.getElementById('category').value
       };
 
       try {
