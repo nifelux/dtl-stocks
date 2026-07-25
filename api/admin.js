@@ -42,6 +42,10 @@ export default async function handler(req, res) {
       // Users
       case 'users':
         return await listUsers(req, res);
+      case 'userDetail':
+        return await getUserDetail(req, res);
+      case 'getUserTeam':
+        return await getUserTeam(req, res);
       case 'freezeUser':
         return await freezeUser(req, res, true);
       case 'unfreezeUser':
@@ -546,6 +550,76 @@ async function listUsers(req, res) {
   const { data, count, error } = await query;
   if (error) return res.status(500).json({ error: error.message });
   return res.status(200).json({ data, count });
+}
+
+/**
+ * Everything an admin needs to see about one user, in a single call —
+ * profile, wallet, and their full activity across every feature. This
+ * is READ-ONLY: it does not let the admin act as the user, only view
+ * their account exactly as they'd see it themselves.
+ */
+async function getUserDetail(req, res) {
+  await verifyAdmin(req);
+  const { user_id } = req.query;
+  if (!user_id) return res.status(400).json({ error: 'user_id is required' });
+
+  const [profile, wallet, transactions, investments, welfare, deposits, withdrawals] = await Promise.all([
+    supabaseAdmin.from('profiles').select('*').eq('id', user_id).single(),
+    supabaseAdmin.from('wallets').select('*').eq('user_id', user_id).single(),
+    supabaseAdmin.from('transactions').select('*').eq('user_id', user_id).order('created_at', { ascending: false }).limit(50),
+    supabaseAdmin.from('investments').select('*, products(name)').eq('user_id', user_id).order('created_at', { ascending: false }),
+    supabaseAdmin.from('welfare_investments').select('*').eq('user_id', user_id).order('created_at', { ascending: false }),
+    supabaseAdmin.from('deposits').select('*').eq('user_id', user_id).order('created_at', { ascending: false }).limit(20),
+    supabaseAdmin.from('withdrawals').select('*').eq('user_id', user_id).order('created_at', { ascending: false }).limit(20)
+  ]);
+
+  if (profile.error || !profile.data) return res.status(404).json({ error: 'User not found' });
+
+  return res.status(200).json({
+    profile: profile.data,
+    wallet: wallet.data || null,
+    transactions: transactions.data || [],
+    investments: investments.data || [],
+    welfare: welfare.data || [],
+    deposits: deposits.data || [],
+    withdrawals: withdrawals.data || []
+  });
+}
+
+/**
+ * Admin-side equivalent of what referral.html shows a user about their
+ * own team — their direct referrals, with the same active/inactive
+ * definition (active = at least one approved deposit).
+ */
+async function getUserTeam(req, res) {
+  await verifyAdmin(req);
+  const { user_id } = req.query;
+  if (!user_id) return res.status(400).json({ error: 'user_id is required' });
+
+  const { data: direct, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, full_name, email, created_at')
+    .eq('referred_by', user_id)
+    .order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+
+  const referralIds = (direct || []).map(d => d.id);
+  let activeIds = [];
+  if (referralIds.length > 0) {
+    const { data: activeDeposits } = await supabaseAdmin
+      .from('deposits')
+      .select('user_id')
+      .eq('status', 'approved')
+      .in('user_id', referralIds);
+    activeIds = [...new Set((activeDeposits || []).map(d => d.user_id))];
+  }
+
+  const team = (direct || []).map(d => ({ ...d, is_active: activeIds.includes(d.id) }));
+  return res.status(200).json({
+    team,
+    totalCount: team.length,
+    activeCount: activeIds.length
+  });
 }
 
 async function freezeUser(req, res, freeze) {
