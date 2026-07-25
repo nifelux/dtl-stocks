@@ -301,11 +301,12 @@ async function claimWelfare(req, res) {
 // Admin actions
 async function createProduct(req, res) {
   await verifyAdmin(req);
-  const { name, description, min_invest, max_invest, daily_roi_percent, duration_days, daily_income_amount, max_purchases_per_user } = req.body;
+  const { name, description, min_invest, max_invest, daily_roi_percent, duration_days, daily_income_amount, max_purchases_per_user, category } = req.body;
   const { data, error } = await supabaseAdmin.from('products').insert({
     name, description, min_invest, max_invest, daily_roi_percent, duration_days,
     daily_income_amount: daily_income_amount ?? null,
-    max_purchases_per_user: max_purchases_per_user ?? null
+    max_purchases_per_user: max_purchases_per_user ?? null,
+    category: category || 'investment'
   }).select().single();
   if (error) return res.status(400).json({ error: error.message });
   return res.status(200).json(data);
@@ -435,3 +436,4 @@ async function cronStatus(req, res) {
   if (error) return res.status(500).json({ error: error.message });
   return res.status(200).json(data);
 }
+  
