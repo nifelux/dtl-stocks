@@ -18,11 +18,18 @@
   </div>
 
   <div class="segment-tabs">
-    <button class="segment-tab is-active" data-panel="panel-investment">Investment</button>
+    <button class="segment-tab is-active" data-panel="panel-alpha">Alpha Plans</button>
+    <button class="segment-tab" data-panel="panel-investment">Investment</button>
     <button class="segment-tab" data-panel="panel-welfare">Welfare</button>
   </div>
 
-  <div id="panel-investment" class="segment-panel is-active">
+  <div id="panel-alpha" class="segment-panel is-active">
+    <div class="product-grid" id="alpha-products-list">
+      <div class="card">Loading…</div>
+    </div>
+  </div>
+
+  <div id="panel-investment" class="segment-panel">
     <div class="product-grid" id="products-list">
       <div class="card">Loading…</div>
     </div>
@@ -76,9 +83,12 @@ document.querySelectorAll('.segment-tab').forEach(tab => {
 // ---------------- INVESTMENT ----------------
 async function loadProducts() {
   const { data } = await supabase.from('products').select('*').eq('is_locked', false);
-  const list = document.getElementById('products-list');
+  const alphaList = document.getElementById('alpha-products-list');
+  const investList = document.getElementById('products-list');
+
   if (!data || data.length === 0) {
-    list.innerHTML = '<div class="card">No products available yet.</div>';
+    alphaList.innerHTML = '<div class="card">No Alpha Plans available yet.</div>';
+    investList.innerHTML = '<div class="card">No products available yet.</div>';
     return;
   }
 
@@ -87,7 +97,7 @@ async function loadProducts() {
   const purchaseCounts = {};
   myInvestments?.forEach(i => { purchaseCounts[i.product_id] = (purchaseCounts[i.product_id] || 0) + 1; });
 
-  list.innerHTML = data.map(p => {
+  function productCardHtml(p) {
     const isFixedPackage = p.daily_income_amount != null;
     const dailyLabel = isFixedPackage ? `₦${p.daily_income_amount.toLocaleString()} / day` : `+${p.daily_roi_percent}% / day`;
     const owned = purchaseCounts[p.id] || 0;
@@ -108,7 +118,18 @@ async function loadProducts() {
         ${atLimit ? 'Purchase Limit Reached' : (isFixedPackage ? `Invest ₦${p.min_invest.toLocaleString()}` : 'Invest Now')}
       </button>
     </div>`;
-  }).join('');
+  }
+
+  const alphaProducts = data.filter(p => p.category === 'alpha');
+  const investmentProducts = data.filter(p => p.category !== 'alpha');
+
+  alphaList.innerHTML = alphaProducts.length
+    ? alphaProducts.map(productCardHtml).join('')
+    : '<div class="card">No Alpha Plans available right now.</div>';
+
+  investList.innerHTML = investmentProducts.length
+    ? investmentProducts.map(productCardHtml).join('')
+    : '<div class="card">No products available yet.</div>';
 
   document.querySelectorAll('.invest-btn:not([disabled])').forEach(btn => {
     btn.addEventListener('click', () => {
