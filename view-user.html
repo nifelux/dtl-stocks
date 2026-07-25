@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en" class="dark-theme">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>View User – Admin</title>
+  <link rel="stylesheet" href="../assets/css/style.css">
+</head>
+<body>
+  <nav class="navbar"><div class="logo"><strong>Admin Panel</strong></div><a href="../dashboard.html">User Site</a></nav>
+  <div class="flex">
+    <aside class="sidebar">
+      <ul class="sidebar-nav">
+        <li><a href="index.html">Dashboard</a></li>
+        <li><a href="users.html" class="active">Users</a></li>
+        <li><a href="deposits.html">Deposits</a></li>
+        <li><a href="withdrawals.html">Withdrawals</a></li>
+        <li><a href="products.html">Products</a></li>
+        <li><a href="support.html">Support</a></li>
+        <li><a href="kyc.html">KYC</a></li>
+        <li><a href="reports.html">Reports</a></li>
+        <li><a href="settings.html">Settings</a></li>
+        <li><a href="logs.html">Logs</a></li>
+      </ul>
+    </aside>
+    <main style="flex:1; padding:2rem;">
+      <a href="users.html" class="text-muted">&larr; Back to Users</a>
+      <div id="content" class="mt-2">Loading…</div>
+    </main>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+    const supabase = createClient('https://jytmnukzvxirnafukbck.supabase.co', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp5dG1udWt6dnhpcm5hZnVrYmNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQxNjQ3MjUsImV4cCI6MjA5OTc0MDcyNX0.ZvGUPTW7dJ3UxL2N1TW0lBCe3H4559HaUEhks7vEbEw');
+
+    async function getToken() { return (await supabase.auth.getSession()).data.session?.access_token; }
+
+    function fmtDate(d) { return d ? new Date(d).toLocaleString() : '—'; }
+    function fmtMoney(n) { return '₦' + Number(n || 0).toLocaleString(); }
+
+    function statusBadge(status) {
+      const s = (status || '').toLowerCase();
+      if (s === 'approved' || s === 'active' || s === 'completed') return `<span class="badge badge-success">${status}</span>`;
+      if (s === 'rejected' || s === 'failed') return `<span class="badge badge-danger">${status}</span>`;
+      if (s === 'pending') return `<span class="badge badge-warning">${status}</span>`;
+      return `<span class="badge">${status || '—'}</span>`;
+    }
+
+    function tableOrEmpty(rows, headerHtml, rowFn, emptyText) {
+      if (!rows || rows.length === 0) return `<p class="text-muted">${emptyText}</p>`;
+      return `
+        <div class="table-container">
+          <table>
+            <thead><tr>${headerHtml}</tr></thead>
+            <tbody>${rows.map(rowFn).join('')}</tbody>
+          </table>
+        </div>`;
+    }
+
+    async function loadUser() {
+      const userId = new URLSearchParams(location.search).get('id');
+      const content = document.getElementById('content');
+      if (!userId) { content.innerHTML = '<div class="alert alert-danger">No user ID provided.</div>'; return; }
+
+      const token = await getToken();
+      const res = await fetch(`/api/admin?action=userDetail&user_id=${userId}`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (!res.ok) { content.innerHTML = `<div class="alert alert-danger">${data.error || 'Failed to load user'}</div>`; return; }
+
+      const { profile, wallet, transactions, investments, welfare, deposits, withdrawals } = data;
+
+      content.innerHTML = `
+        <h2>${profile.full_name || profile.email}</h2>
+        <p class="text-muted">${profile.email} · Joined ${fmtDate(profile.created_at)}</p>
+
+        <div class="widget-grid mt-2">
+          <div class="card stat-card">
+            <div class="stat-value">${fmtMoney(wallet?.balance)}</div>
+            <div class="stat-label">Wallet Balance</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-value">${fmtMoney(wallet?.total_deposited)}</div>
+            <div class="stat-label">Total Deposited</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-value">${fmtMoney(wallet?.total_withdrawn)}</div>
+            <div class="stat-label">Total Withdrawn</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-value">${fmtMoney(wallet?.total_earned)}</div>
+            <div class="stat-label">Total Earned</div>
+          </div>
+        </div>
+
+        <div class="card mt-2">
+          <h3>Account Info</h3>
+          <p><strong>VIP Level:</strong> ${profile.vip_level || 'bronze'}</p>
+          <p><strong>KYC Status:</strong> ${statusBadge(profile.kyc_status)}</p>
+          <p><strong>Status:</strong> ${profile.is_banned ? '<span class="badge badge-danger">Banned</span>' : profile.is_frozen ? '<span class="badge badge-warning">Frozen</span>' : '<span class="badge badge-success">Active</span>'}</p>
+          <p><strong>Referral Code:</strong> ${profile.referral_code || '—'}</p>
+          <p><strong>Phone:</strong> ${profile.phone || '—'}</p>
+        </div>
+
+        <div class="card mt-2">
+          <h3>Transaction History</h3>
+          ${tableOrEmpty(transactions,
+            '<th>Date</th><th>Type</th><th>Amount</th><th>Status</th><th>Reference</th>',
+            t => `<tr><td>${fmtDate(t.created_at)}</td><td>${t.type}</td><td>${fmtMoney(t.amount)}</td><td>${statusBadge(t.status)}</td><td>${t.reference || '—'}</td></tr>`,
+            'No transactions yet.'
+          )}
+        </div>
+
+        <div class="card mt-2">
+          <h3>Investment History</h3>
+          ${tableOrEmpty(investments,
+            '<th>Product</th><th>Amount</th><th>Daily Income</th><th>Progress</th><th>Earned</th><th>Status</th>',
+            i => `<tr><td>${i.products?.name || 'Investment'}</td><td>${fmtMoney(i.amount)}</td><td>${fmtMoney(i.daily_income)}</td><td>${i.days_elapsed}/${i.duration_days} days</td><td>${fmtMoney(i.total_income)}</td><td>${statusBadge(i.status)}</td></tr>`,
+            'No investments yet.'
+          )}
+        </div>
+
+        <div class="card mt-2">
+          <h3>Welfare Plans</h3>
+          ${tableOrEmpty(welfare,
+            '<th>Amount</th><th>Duration</th><th>Daily Rate</th><th>Matures</th><th>Status</th>',
+            w => `<tr><td>${fmtMoney(w.amount)}</td><td>${w.duration_days} days</td><td>${w.daily_rate_percent}%/day</td><td>${fmtDate(w.maturity_date)}</td><td>${statusBadge(w.status)}</td></tr>`,
+            'No Welfare plans yet.'
+          )}
+        </div>
+
+        <div class="card mt-2">
+          <h3>Deposit History</h3>
+          ${tableOrEmpty(deposits,
+            '<th>Date</th><th>Amount</th><th>Method</th><th>Status</th>',
+            d => `<tr><td>${fmtDate(d.created_at)}</td><td>${fmtMoney(d.amount)}</td><td>${d.payment_method || '—'}</td><td>${statusBadge(d.status)}</td></tr>`,
+            'No deposits yet.'
+          )}
+        </div>
+
+        <div class="card mt-2">
+          <h3>Withdrawal History</h3>
+          ${tableOrEmpty(withdrawals,
+            '<th>Date</th><th>Amount</th><th>Bank</th><th>Status</th>',
+            w => `<tr><td>${fmtDate(w.created_at)}</td><td>${fmtMoney(w.amount)}</td><td>${w.bank_details?.bank_name || '—'} · ${w.bank_details?.account_number || ''}</td><td>${statusBadge(w.status)}</td></tr>`,
+            'No withdrawals yet.'
+          )}
+        </div>
+      `;
+    }
+
+    loadUser();
+  </script>
+</body>
+</html>
