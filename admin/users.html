@@ -63,6 +63,7 @@
           <td>${u.vip_level}</td>
           <td>${u.is_banned ? '<span class="badge badge-danger">Banned</span>' : u.is_frozen ? '<span class="badge badge-warning">Frozen</span>' : '<span class="badge badge-success">Active</span>'}</td>
           <td class="flex gap-1">
+            <a class="btn btn-sm btn-primary" href="view-user.html?id=${u.id}">View</a>
             <button class="btn btn-sm btn-outline" onclick="openAction('${u.id}', 'freeze', ${u.is_frozen})">${u.is_frozen?'Unfreeze':'Freeze'}</button>
             <button class="btn btn-sm btn-danger" onclick="openAction('${u.id}', 'ban', ${u.is_banned})">${u.is_banned?'Unban':'Ban'}</button>
             <button class="btn btn-sm btn-outline" onclick="openCreditDebit('${u.id}')">C/D</button>
@@ -108,4 +109,4 @@
     checkAdmin().then(()=> loadUsers());
   </script>
 </body>
-  </html>
+</html>
