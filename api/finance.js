@@ -42,6 +42,8 @@ export default async function handler(req, res) {
         return await listWithdrawalProofs(req, res);
       case 'addProofComment':
         return await addProofComment(req, res);
+      case 'myReferralTeam':
+        return await myReferralTeam(req, res);
       default:
         return res.status(400).json({ error: `Invalid or missing action parameter: '${action}'` });
     }
@@ -332,6 +334,47 @@ async function createWithdrawalProof(req, res) {
 
   if (error) return res.status(500).json({ error: error.message });
   return res.status(201).json(data);
+}
+
+/**
+ * A user's own direct referrals, with active/inactive status. Exists
+ * because checking deposit activity from the browser (deposits table,
+ * RLS-scoped to each user's own rows) always returned empty for anyone
+ * checking someone ELSE's deposits — which is every referrer checking
+ * their referrals. This runs server-side with the service-role
+ * connection instead, which is the only way to see it correctly.
+ *
+ * Referral IDs are derived here from profiles.referred_by = the
+ * caller's own ID — never taken from the client — so this can't be
+ * used to probe an arbitrary user's deposit history.
+ */
+async function myReferralTeam(req, res) {
+  const user = await verifyUser(req);
+
+  const { data: direct, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, full_name, email, created_at')
+    .eq('referred_by', user.id)
+    .order('created_at', { ascending: false });
+  if (error) return res.status(500).json({ error: error.message });
+
+  const referralIds = (direct || []).map(d => d.id);
+  let activeIds = [];
+  if (referralIds.length > 0) {
+    const { data: activeDeposits } = await supabaseAdmin
+      .from('deposits')
+      .select('user_id')
+      .eq('status', 'approved')
+      .in('user_id', referralIds);
+    activeIds = [...new Set((activeDeposits || []).map(d => d.user_id))];
+  }
+
+  const team = (direct || []).map(d => ({ ...d, is_active: activeIds.includes(d.id) }));
+  return res.status(200).json({
+    team,
+    totalCount: team.length,
+    activeCount: activeIds.length
+  });
 }
 
 async function listWithdrawalProofs(req, res) {
