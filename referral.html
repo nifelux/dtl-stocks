@@ -92,23 +92,18 @@ async function loadReferral() {
     alert('Referral code copied!');
   });
 
-  const { data: direct } = await supabase.from('profiles').select('id, full_name, email, created_at').eq('referred_by', user.id);
-  const referralIds = (direct || []).map(d => d.id);
+  // Routed through the server (finance.js: myReferralTeam) rather than
+  // querying deposits directly — deposits' RLS only allows a user to
+  // see their OWN rows, so checking a referral's deposit status from
+  // the browser as the referrer always returned empty, regardless of
+  // whether they'd actually deposited.
+  const token = (await supabase.auth.getSession()).data.session?.access_token;
+  const teamRes = await fetch('/api/finance?action=myReferralTeam', { headers: { Authorization: `Bearer ${token}` } });
+  const teamData = await teamRes.json();
+  const direct = teamData.team || [];
+  const activeIds = new Set(direct.filter(d => d.is_active).map(d => d.id));
 
-  // "Active" = has made at least one approved deposit — the only real
-  // signal of engagement available (no last-login tracking exists),
-  // and it's the same event that triggers the referral bonus itself.
-  let activeIds = new Set();
-  if (referralIds.length > 0) {
-    const { data: activeDeposits } = await supabase
-      .from('deposits')
-      .select('user_id')
-      .eq('status', 'approved')
-      .in('user_id', referralIds);
-    activeIds = new Set((activeDeposits || []).map(d => d.user_id));
-  }
-
-  document.getElementById('total-team').textContent = direct?.length || 0;
+  document.getElementById('total-team').textContent = direct.length || 0;
   document.getElementById('active-team').textContent = activeIds.size;
 
   function renderReferralList(filter) {
